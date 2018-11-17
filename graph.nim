@@ -172,15 +172,14 @@ digraph graph_name {
 when isMainModule:
   let net = newNetwork()
 
-  let tags = @["Tori","Shiho","Mitsuki"]
+  let tags = @["A","B","C"]
 
   for i in 0..high(tags):
     for j in (i+1)..high(tags):
       net.push(tags[i],tags[j])
 
-  net["Tori"] => net["Shiho"]
+  net["A"] => net["B"]
 
   net.print
 
-  echo net["hoge"].label
 
