@@ -4,19 +4,20 @@ from algorithm import binarySearch,sort,sorted
 
 type
   Edge* = ref object
-    source:Node ## 元ノード
-    target:Node ## 先ノード
-    label:string ## ラベル
-    weight:float ## 重み
+    source:Node
+    target:Node
+    label:string
+    passed:int
+    weight:float
 
 
   Node* = ref object
-    id:string ## ID
-    label:string ## ラベル
-    edges:seq[Edge] ## エッジリスト
+    id:string
+    label:string
+    edges:seq[Edge]
 
   Network* = ref object
-    nodes:Table[string,Node] ##ノードテーブル
+    nodes:Table[string,Node]
 
 
 proc getEdgeIndex*(self:Node,target:Node):int
@@ -27,6 +28,7 @@ proc newEdge*(source,target:Node,label:string="",weight:float=0.0):Edge=
   e.target = target
   e.source = source
   e.label = label
+  e.passed = 1
   e.weight = weight
   return e
 
@@ -59,24 +61,27 @@ proc getEdgeIndex*(self:Node,target:Node):int=
   )
   return idx
 
-proc addEdge*(self:Node,edge:Edge)=
-  self.edges.add(edge)
-  #sort[Edge](self.edges,proc(x,y:Edge):int=int(y.weight-x.weight))
 
-proc `=>`*(self:Node,target:Node):Node {.discardable.}=
+proc `->`*(self:Node,target:Node):Node {.discardable.}=
+  #[
+  # This operetor is that conect a Node to Node.
+  # If the Node does not exist,create a new Node.
+  # Count of pass through the edge,`passed` is counted up
+  ]#
   let idx = self.getEdgeIndex(target)
+  echo idx
   if idx == -1:
-    self.addEdge(newEdge(self,target,weight=1.0))
+    self.edges.add(newEdge(self,target,weight=1.0))
     return target
   else:
-    self.edges[idx].weight += 1.0
+    self.edges[idx].passed += 1
     return target
 
-proc `<=`*(self:Node,target:Node):Node {.discardable.}=
-  return target => self
+proc `<-`*(self:Node,target:Node):Node {.discardable.}=
+  return target -> self
 
-proc `<=>`*(self:Node,target:Node):Node {.discardable.}=
-  return self => target => self
+proc `<->`*(self:Node,target:Node):Node {.discardable.}=
+  return self -> target -> self
 
 
 proc getEdge*(self:Node,target:Node):Edge=
@@ -136,13 +141,13 @@ proc push*(self:Network,source:string,target:string,weight=1.0,selfconnect:bool=
     t_node = newNode(target,target)
     self.addNode(t_node)
 
-  discard s_node <=> t_node
+  discard s_node <-> t_node
 
 
 proc print*(self:Network)=
   for k,v in self.nodes:
     for i,e in v.edges:
-      echo fmt"{v.label} ---> {e.weight} ---> {v.edges[i].target.label}"
+      echo fmt"{v.label} ---> {e.passed} ---> {v.edges[i].target.label}"
 
 proc toDOT*(self:Network):string=
   var buff="""
@@ -178,8 +183,8 @@ when isMainModule:
     for j in (i+1)..high(tags):
       net.push(tags[i],tags[j])
 
-  net["A"] => net["B"]
-
+  net["A"] -> net["B"]
+  
   net.print
 
 
