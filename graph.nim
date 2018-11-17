@@ -90,13 +90,13 @@ proc `->`*(self:Node,target:Node):Node {.discardable.}=
   var iedge = target.getInEdge(self)
 
   if isNil(oedge):
-    oedge = newEdge(target,weight=1.0)
+    oedge = newEdge(target,weight=0.0)
     self.out_edges.add(target.id,oedge)
   
   oedge.passed += 1
 
   if isNil(iedge):
-    iedge = newEdge(self,weight=1.0)
+    iedge = newEdge(self,weight=0.0)
     target.in_edges.add(self.id,iedge)
     
   iedge.passed += 1
@@ -130,6 +130,10 @@ proc delInEdge*(self:Node,target:Node)=
 
 proc degree*(self:Node):int=
   return len(self.out_edges) + len(self.in_edges)
+proc indegree*(self:Node):int=
+  return len(self.in_edges)
+proc outdegree*(self:Node):int=
+  return len(self.out_edges)
   
 # Network ---------------------------------------------------------------------
 proc newNetwork*(name:string="NoName",directed=true):Network=
@@ -164,7 +168,7 @@ proc `[]`*(self:Network,id:string):Node=
   ]#
   return self.getNode(id)
 
-proc `[]=`*(self:Network,id:string,node:Node):Node=
+proc `[]=`*(self:Network,id:string,node:Node):Node{.discardable.}=
   #[
   # add a node into Network.
   ]#
@@ -191,7 +195,7 @@ proc delNode*(self:Network,id:string)=
   self.nodes.del(id)
 
 
-proc push*(self:Network,source:string,target:string,weight=1.0,selfconnect:bool=false)=
+proc push*(self:Network,source:string,target:string,weight=0.0,selfconnect:bool=false)=
 
   if not(selfconnect) and source == target:
     return
@@ -217,7 +221,7 @@ proc print*(self:Network)=
   # echo the Network
   ]#
   for k,v in self.nodes:
-    echo fmt"Node:{v.label}(degree:{v.degree})"
+    echo fmt"Node:{v.label}(degree:{v.outdegree})"
     for i,e in v.out_edges:
       echo "\t",fmt"{v.label} ---> {e.passed} ---> {e.target.label}"
 
@@ -232,7 +236,7 @@ digraph graph_name {
     bgcolor = "#FFFFFF",
     fontcolor = "#000000",
     fontsize = "9",
-    layout = "circo",
+    layout = "fdp",
   ]
 """
   
@@ -242,7 +246,7 @@ digraph graph_name {
 
   for id,node in self.nodes:
     for t,edge in node.out_edges:
-      buff.add fmt"{node.label} -> {edge.target.label} [arrowhead = none,weight={$(edge.weight)}];"
+      buff.add fmt"{node.label} -> {edge.target.label} [arrowhead = vee,weight={$edge.passed}];"
       buff.add "\n"
 
   buff.add "}"
@@ -266,7 +270,13 @@ when isMainModule:
 
   net.print
   echo "----------------------------"
-  echo "Delete A node"
+  echo "Add D node"
   echo "----------------------------"
-  net.delNode("A")
+  let d = newNode("D")
+  net["D"] = d
+  net["D"] <-> net["A"]
+  net["D"] <-> net["A"]
+  net["D"] <-> net["A"]
   net.print
+  
+  echo net.toDOT
