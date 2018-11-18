@@ -1,36 +1,49 @@
+#[
+# Graph Structure for Nim
+# author:souchan_t@hotmail.com
+# 
+]#
 import tables
 import strformat
-from algorithm import binarySearch,sort,sorted
 
 type
-  Edge* = ref object
+  Edge* = ref object of RootObj
     source:Node
     target:Node
     label:string
     passed:int
     weight:float
 
-
-  Node* = ref object
+  Node* = ref object of RootObj
     id:string
     label:string
-    out_edges:OrderedTable[string,Edge]
-    in_edges:OrderedTable[string,Edge]
+    out_edges:OrderedTable[string,Edge] #TODO Should change to be faster
+    in_edges:OrderedTable[string,Edge]  #TODO Should change to be faster
 
-  Network* = ref object
+  Network* = ref object of RootObj
     name:string
-    directed:bool
     nodes:Table[string,Node]
 
+  GraphException = ref object of Exception
 
-# Edge ------------------------------------------------------------------------
-proc newEdge*(target:Node,label:string="",weight:float=0.0):Edge=
+#------------------------------------------------------------------------------
+# Edge Procedures
+#------------------------------------------------------------------------------
+proc newEdge*(source,target:Node,label:string="",weight:float=0.0):Edge=
+  #[
+  # create a new Edge
+  ]#
   var e = new Edge
+  e.source = source
   e.target = target
   e.label = label
   e.passed = 0
   e.weight = weight
   return e
+
+proc `$`*(self:Edge):string=
+  result = fmt"Edge {self.source.label} -> {self.target.label} "
+  result.add fmt"weight:{self.weight},passed:{self.passed})"
 
 #proc isAdjacent*(self:Edge,target:Edge):bool=
 #  if self.source.getEdgeIndex(target.source) == -1 and
@@ -41,7 +54,9 @@ proc newEdge*(target:Node,label:string="",weight:float=0.0):Edge=
 #  else:
 #    return true
 
-# Node ------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Node Procedures
+#------------------------------------------------------------------------------
 proc init*(self:Node,id:string,label:string="")=
   #[
   # Node object Initalizer
@@ -61,6 +76,18 @@ proc newNode*(id:string,label:string=""):Node=
   var n = new Node
   n.init(id,label)
   return n
+
+proc degree*(self:Node):int=
+  return len(self.out_edges) + len(self.in_edges)
+
+proc in_degree*(self:Node):int=
+  return len(self.in_edges)
+
+proc out_degree*(self:Node):int=
+  return len(self.out_edges)
+
+proc `$`*(self:Node):string=
+  return fmt"Node id:{self.id},label:{self.label},degree:{self.out_degree}"
 
 proc getOutEdge*(self:Node,target:Node):Edge=
   #[
@@ -88,16 +115,15 @@ proc `->`*(self:Node,target:Node):Node {.discardable.}=
 
   var oedge = self.getOutEdge(target)
   var iedge = target.getInEdge(self)
-
   if isNil(oedge):
-    oedge = newEdge(target,weight=0.0)
-    self.out_edges.add(target.id,oedge)
+    oedge = newEdge(self,target,weight=0.0)
+    self.out_edges[target.id] = oedge
   
   oedge.passed += 1
 
   if isNil(iedge):
-    iedge = newEdge(self,weight=0.0)
-    target.in_edges.add(self.id,iedge)
+    iedge = newEdge(target,self,weight=0.0)
+    target.in_edges[self.id] = iedge
     
   iedge.passed += 1
 
@@ -115,12 +141,19 @@ proc `<->`*(self:Node,target:Node):Node {.discardable.}=
   ]#
   return self -> target -> self
 
+proc `--`*(self:Node,target:Node):Edge {.discardable.}=
+  #[
+  # return outedge.
+  ]#
+  return self.getOutEdge(target)
+
 proc delOutEdge*(self:Node,target:Node)=
   #[
   # delete a outedge of self and inedge of target
   ]#
   self.out_edges.del(target.id)
   target.in_edges.del(self.id)
+
 proc delInEdge*(self:Node,target:Node)=
   #[
   # delete a inedge of self and outede of target
@@ -128,15 +161,11 @@ proc delInEdge*(self:Node,target:Node)=
   self.in_edges.del(target.id)
   target.out_edges.del(self.id)
 
-proc degree*(self:Node):int=
-  return len(self.out_edges) + len(self.in_edges)
-proc indegree*(self:Node):int=
-  return len(self.in_edges)
-proc outdegree*(self:Node):int=
-  return len(self.out_edges)
   
-# Network ---------------------------------------------------------------------
-proc newNetwork*(name:string="NoName",directed=true):Network=
+#------------------------------------------------------------------------------
+# Network(Graph) Procedures
+#------------------------------------------------------------------------------
+proc newNetwork*(name:string="NoName"):Network=
   #[
   # create a new Network.
   ]#
@@ -144,7 +173,6 @@ proc newNetwork*(name:string="NoName",directed=true):Network=
   var net = new Network
   net.nodes = initTable[string,Node]()
   net.name = name
-  net.directed = directed
   return net
 
 proc getNode*(self:Network,id:string):Node=
@@ -158,9 +186,23 @@ proc getNode*(self:Network,id:string):Node=
 
 proc addNode*(self:Network,node:Node)=
   #[
-  # add a node into Network.
+  # add a node to the Network.
   ]#
-  self.nodes.add(node.id,node)
+  self.nodes[node.id] = node
+
+proc addNode*(self:Network,nodes:openarray[Node])=
+  #[
+  # add nodes to the Network
+  ]#
+  for n in nodes:
+    self.addNode(n)
+
+proc addNode*(self:Network,node_ids:openarray[string])=
+  #[
+  # add nodes to the Network,by string of id
+  ]#
+  for id in node_ids:
+    self.addNode(newNode(id))
 
 proc `[]`*(self:Network,id:string):Node=
   #[
@@ -170,11 +212,18 @@ proc `[]`*(self:Network,id:string):Node=
 
 proc `[]=`*(self:Network,id:string,node:Node):Node{.discardable.}=
   #[
-  # add a node into Network.
+  # add a node to Network.
   ]#
   self.addNode(node)
   return node
 
+proc `[]=`*(self:Network,id:string,label:string):Node{.discardable.}=
+  #[
+  # add a node to Network by string
+  ]#
+  var node = newNode(id=id,label=label)
+  self.addNode(node)
+  return node
 
 proc delNode*(self:Network,id:string)=
   #[
@@ -194,9 +243,51 @@ proc delNode*(self:Network,id:string)=
   # deletea the node
   self.nodes.del(id)
 
+iterator depthFirstSearch*(self:Node):Node=
+  #[
+  # Depth First Search Iterator(no recursive)
+  ]#
+  var stack:seq[Node] = @[]
+  var visited:Table[string,bool] = initTable[string,bool]()
+  visited[self.id] = true
+  stack.add(self)
 
-proc push*(self:Network,source:string,target:string,weight=0.0,selfconnect:bool=false)=
+  while stack.len() != 0:
+    var node = stack.pop()
+    yield node
+    for i,e in node.out_edges:
+      if visited.hasKey(e.target.id) == false:
+        visited[e.target.id] = true
+        stack.add(e.target)
 
+iterator breadthFirstSearch*(self:Node):Node=
+  #[
+  # Breadth First Search Iterator
+  ]#
+  var queue:seq[Node] = @[]
+  var visited:Table[string,bool] = initTable[string,bool]()
+  visited[self.id] = true
+  queue.add(self)
+  while queue.len() != 0:
+    var node = queue[0]
+    queue.del(0)
+
+    yield node
+    for i,e in node.out_edges:
+      if visited.hasKey(e.target.id) == false:
+        visited[e.target.id] = true
+        queue.add(e.target)
+
+
+proc addNodeAndConnect*(self:Network,source:string,target:string,
+  directed=false,weight=0.0,selfconnect:bool=false)=
+  #[
+  # The proc adds pair nodes to the Network.
+  # And source node connect to target node.
+  # if Network is undirected,connet to nodes each other
+  # [directed]   A -> B
+  # [undirected] A -> B , B -> A
+  ]#
   if not(selfconnect) and source == target:
     return
 
@@ -211,17 +302,29 @@ proc push*(self:Network,source:string,target:string,weight=0.0,selfconnect:bool=
     t_node = newNode(target,target)
     self.addNode(t_node)
   
-  if self.directed:
+  if directed:
     discard s_node -> t_node
   else:
     discard s_node <-> t_node
+
+proc addNodeAndConnect*(self:Network,tags:openarray[string],
+  directed=false,weight=0.0,selfconnect:bool=false)=
+  #[
+  # The proc adds nodes to the Network.
+  # `push(network,["A","B","C"])` means
+  #   [directed]   A -> B, A -> C, B -> C
+  #   [undirected] A <-> B, A <-> C ,B <-> C
+  ]#
+  for i in 0..high(tags):
+    for j in i..high(tags):
+      self.addNodeAndConnect(tags[i],tags[j],directed,weight,selfconnect)
 
 proc print*(self:Network)=
   #[
   # echo the Network
   ]#
   for k,v in self.nodes:
-    echo fmt"Node:{v.label}(degree:{v.outdegree})"
+    echo fmt"Node:{v.label}(degree:{v.out_degree})"
     for i,e in v.out_edges:
       echo "\t",fmt"{v.label} ---> {e.passed} ---> {e.target.label}"
 
@@ -254,29 +357,15 @@ digraph graph_name {
 
 
 when isMainModule:
-  let net = newNetwork(directed=false)
+  let net = newNetwork()
 
-  echo "----------------------------"
-  echo "Add A,B,C nodes,connect each other"
-  echo "----------------------------"
+  net.addNode(["A","B","C","D","E","F"])
+ 
+  net["A"] <-> net["B"]
+  net["B"] <-> net["C"]
+  net["A"] <-> net["D"]
+  net["B"] <-> net["E"]
 
-  let tags = @["A","B","C"]
-
-  for i in 0..high(tags):
-    for j in (i+1)..high(tags):
-      net.push(tags[i],tags[j])
-
-  #net.push("A","B")
-
+  for n in net["A"].breadthFirstSearch:
+    echo n
   net.print
-  echo "----------------------------"
-  echo "Add D node"
-  echo "----------------------------"
-  let d = newNode("D")
-  net["D"] = d
-  net["D"] <-> net["A"]
-  net["D"] <-> net["A"]
-  net["D"] <-> net["A"]
-  net.print
-  
-  echo net.toDOT
