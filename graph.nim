@@ -5,36 +5,40 @@
 ]#
 import tables
 import strformat
+import heapqueue
 
 type
-  Edge* = ref object of RootObj
+  Edge* = ref object of RootObj ## Edge between Nodes
     source:Node
     target:Node
     label:string
     passed:int
     weight:float
 
-  Node* = ref object of RootObj
+  Node* = ref object of RootObj ## Node of Graph
     id:string
     label:string
     count:int
     out_edges:OrderedTable[string,Edge] #TODO Should change to be faster
     in_edges:OrderedTable[string,Edge]  #TODO Should change to be faster
 
-  Network* = ref object of RootObj
+  NodeCmp = tuple[node:Node,priority:float] ## for Comparing
+
+  Network* = ref object of RootObj ## Graph
     name:string
-    nodes:Table[string,Node]
+    nodes:OrderedTable[string,Node]
 
   GraphException = ref object of Exception
 
-  AdjacentMatrix = ref seq[seq[float]]
+  AdjMatrix = seq[seq[int]]
+  AdjMatrix_weighted = seq[seq[float]]
 #------------------------------------------------------------------------------
 # Edge Procedures
 #------------------------------------------------------------------------------
 proc newEdge*(source,target:Node,label:string="",weight:float=0.0):Edge=
-  #[
-  # create a new Edge
-  ]#
+  ##[
+  ## create a new Edge
+  ]##
   var e = new Edge
   e.source = source
   e.target = target
@@ -57,12 +61,21 @@ proc `$`*(self:Edge):string=
 #    return true
 
 #------------------------------------------------------------------------------
+# NodeCmp Procedures
+#------------------------------------------------------------------------------
+proc `<`*(self,other:NodeCmp):bool=
+  ##[
+  # compare Node by weight,for push to HeapQueue.
+  ]##
+  return self.priority < other.priority
+  
+#------------------------------------------------------------------------------
 # Node Procedures
 #------------------------------------------------------------------------------
 proc init*(self:Node,id:string,label:string="")=
-  #[
+  ##[
   # Node object Initalizer
-  ]#
+  ]##
   self.id = id
   if label=="":
     self.label = id
@@ -73,38 +86,50 @@ proc init*(self:Node,id:string,label:string="")=
   self.in_edges  = initOrderedTable[string,Edge]()
 
 proc newNode*(id:string,label:string=""):Node=
-  #[
+  ##[
   # create a new Node with initilize.
-  ]#
+  ]##
   var n = new Node
   n.init(id,label)
   return n
 
 proc degree*(self:Node):int=
+  ##[
+  # degree of Node.sum of out degree and in degree
+  ]##
   return len(self.out_edges) + len(self.in_edges)
 
 proc in_degree*(self:Node):int=
+  ##[
+  # in degree of Node.
+  ]##
   return len(self.in_edges)
 
 proc out_degree*(self:Node):int=
+  ##[
+  # out degree of Node
+  ]##
   return len(self.out_edges)
 
 proc `$`*(self:Node):string=
+  ##[
+  # Node object to strings
+  ]##
   return fmt"Node id:{self.id},label:{self.label},degree:{self.out_degree}"
 
 proc getOutEdge*(self:Node,target:Node):Edge=
-  #[
-  # return a edge.if edge was not found,proc returns nil.
-  ]#
+  ##[
+  ## return a edge.if edge was not found,proc returns nil.
+  ]##
   if self.out_edges.hasKey(target.id):
     return self.out_edges[target.id]
   else:
     return nil
 
 proc getInEdge*(self:Node,target:Node):Edge=
-  #[
+  ##[
   # return a edge.if edge was not found,proc returns nil.
-  ]#
+  ]##
   if self.in_edges.hasKey(target.id):
     return self.in_edges[target.id]
   else:
@@ -195,26 +220,19 @@ iterator breadthFirstSearch*(self:Node):Node=
   #[
   # Breadth First Search Iterator
   ]#
-  var queue:seq[Node] = @[]
+   
   var visited:Table[string,bool] = initTable[string,bool]()
   visited[self.id] = true
-  queue.add(self)
+  var queue:HeapQueue[NodeCmp] = newHeapQueue[NodeCmp]()
+  queue.push((self,0.0))
   while queue.len() != 0:
-    var node = queue[0]
-    queue.del(0)
+    var node = queue.pop()[0]
 
     yield node
-    node.out_edges.sort(proc(x,y:(string,Edge)):int=
-      if x[1].weight == y[1].weight:
-        return 0
-      elif x[1].weight < y[1].weight:
-        return -1
-      else:
-        return 1)
     for i,e in node.out_edges:
       if visited.hasKey(e.target.id) == false:
         visited[e.target.id] = true
-        queue.add(e.target)
+        queue.push((e.target,e.weight))
         
   
 #------------------------------------------------------------------------------
@@ -226,7 +244,7 @@ proc newNetwork*(name:string="NoName"):Network=
   ]#
 
   var net = new Network
-  net.nodes = initTable[string,Node]()
+  net.nodes = initOrderedTable[string,Node]()
   net.name = name
   return net
 
@@ -343,6 +361,42 @@ iterator edges*(self:Network):Edge=
     for eid,edge in node.out_edges:
       yield edge
 
+proc getAdjMatrix*(self:Network):AdjMatrix=
+
+  # init matrix
+  let n = len(self.nodes)
+  var matrix = newSeq[seq[int]](n)
+
+  var ids = newTable[string,int]()
+  var i=0
+  for id,node in self.nodes:
+    matrix[i] = newSeq[int](n)
+    ids[node.id] = i
+    i += 1
+  
+  #plot to matrix
+  for e in self.edges:
+    matrix[ids[e.source.id]][ids[e.target.id]] = 1
+
+  return matrix
+proc getAdjMatrix_weighted*(self:Network):AdjMatrix_weighted=
+  # init matrix
+  let n = len(self.nodes)
+  var matrix = newSeq[seq[float]](n)
+
+  var ids = newTable[string,int]()
+  var i=0
+  for id,node in self.nodes:
+    matrix[i] = newSeq[float](n)
+    ids[node.id] = i
+    i += 1
+  
+  #plot to matrix
+  for e in self.edges:
+    matrix[ids[e.source.id]][ids[e.target.id]] = e.weight
+
+  return matrix
+  
 
 proc print*(self:Network)=
   #[
@@ -390,7 +444,12 @@ when isMainModule:
   net["B"] <-> net["C"]
   net["A"] <-> net["D"]
   net["B"] <-> net["E"]
+  (net["B"] -- net["E"]).weight = 0.2
   (net["B"] -- net["C"]).weight = 0.1
 
   for n in net["A"].breadthFirstSearch:
     echo n
+
+  var m = net.getAdjMatrix_weighted()
+  for i in m:
+    echo i
