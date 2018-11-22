@@ -246,6 +246,7 @@ proc newNetwork*(name:string="NoName"):Network=
   result.nodes = initOrderedTable[string,Node]()
   result.name = name
 
+
 proc getNode*(self:Network,id:string):Node=
   #[
   # get a node by id. if id does not exist,proc returns nil
@@ -360,7 +361,9 @@ iterator edges*(self:Network):Edge=
       yield edge
 
 proc getAdjMatrix*(self:Network):AdjMatrix=
-
+  ## create a adjacency matrix from network.
+  ## a value that node does not connect others is `0`.
+  ##
   # init matrix
   let n = len(self.nodes)
   var matrix = newSeq[seq[int]](n)
@@ -377,7 +380,11 @@ proc getAdjMatrix*(self:Network):AdjMatrix=
     matrix[ids[e.source.id]][ids[e.target.id]] = 1
 
   return matrix
+
 proc getAdjMatrix_weighted*(self:Network):AdjMatrix_weighted=
+  ## create a weigthted adjacency matrix from Network.
+  ## a value that node does not connect others is `Inf`.
+  
   # init matrix
   let n = len(self.nodes)
   var matrix = newSeq[seq[float]](n)
@@ -398,6 +405,40 @@ proc getAdjMatrix_weighted*(self:Network):AdjMatrix_weighted=
     matrix[ids[e.source.id]][ids[e.target.id]] = e.weight
 
   return matrix
+
+proc newNetwork*(matrix:AdjMatrix,
+                 nodeNames:openarray[string],
+                 name="noname"):Network=
+  ## create a new Network from adjacency matrix.
+  ## `matrix` param expect a `seq[seq[int]]` type.
+  ## `nodeName` param expect a `seq[string]` type.
+
+  result = newNetwork(name=name)
+  result.addNode(nodeNames)
+
+  let N = nodeNames.len
+  for i in 0..<N:
+    for j in 0..<N:
+      if matrix[i][j] == 1:
+        result[nodeNames[i]] -> result[nodeNames[j]]
+
+proc newNetwork*(matrix:AdjMatrix_weighted,
+                 nodeNames:openarray[string],
+                 name="noname"):Network=
+  ## create a new Netowork from weigthted adjacency matrix.
+  ## `matrix` param expect a `seq[seq[float]]` type
+  ## `nodeName` param expect a seq[string]` type
+
+  result = newNetwork(name=name)
+  result.addNode(nodeNames)
+
+  let N = nodeNames.len
+  for i in 0..<N:
+    for j in 0..<N:
+      if matrix[i][j] != Inf:
+        result[nodeNames[i]] -> result[nodeNames[j]]
+        (result[nodeNames[i]] -- result[nodeNames[j]]).weight = matrix[i][j]
+
 
 proc degrees*(self:Network):seq[int]=
   result = newSeq[int](self.nodes.len)
@@ -452,8 +493,8 @@ digraph graph_name {
 
 when isMainModule:
   let net = newNetwork()
-
-  net.addNode(["A","B","C","D","E","F"])
+  let nodenames = ["A","B","C","D","E","F"]
+  net.addNode(nodenames)
  
   net["A"] <-> net["B"]
   net["B"] <-> net["C"]
@@ -465,10 +506,13 @@ when isMainModule:
   for n in net["A"].breadthFirstSearch:
     echo n
 
-  var m = net.getAdjMatrix_weighted()
-  for i in m:
-    echo i
+  var m = net.getAdjMatrix()
 
-  echo net.degrees
+  let net2 = newNetwork(m,nodenames)
 
-  echo net.centralityDegree
+  net.print
+  echo m
+  echo "======================================"
+  net2.print
+  echo net2.getAdjMatrix
+
