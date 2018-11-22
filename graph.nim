@@ -39,13 +39,12 @@ proc newEdge*(source,target:Node,label:string="",weight:float=0.0):Edge=
   ##[
   ## create a new Edge
   ]##
-  var e = new Edge
-  e.source = source
-  e.target = target
-  e.label = label
-  e.passed = 0
-  e.weight = weight
-  return e
+  result = new Edge
+  result.source = source
+  result.target = target
+  result.label = label
+  result.passed = 0
+  result.weight = weight
 
 proc `$`*(self:Edge):string=
   result = fmt"Edge {self.source.label} -> {self.target.label} "
@@ -67,7 +66,7 @@ proc `<`*(self,other:NodeCmp):bool=
   ##[
   # compare Node by weight,for push to HeapQueue.
   ]##
-  return self.priority < other.priority
+  self.priority < other.priority
   
 #------------------------------------------------------------------------------
 # Node Procedures
@@ -89,33 +88,32 @@ proc newNode*(id:string,label:string=""):Node=
   ##[
   # create a new Node with initilize.
   ]##
-  var n = new Node
-  n.init(id,label)
-  return n
+  result = new Node
+  result.init(id,label)
+
+proc inDegree*(self:Node):int=
+  ##[
+  # in degree of Node.
+  ]##
+  len(self.in_edges)
+
+proc outDegree*(self:Node):int=
+  ##[
+  # out degree of Node
+  ]##
+  len(self.out_edges)
 
 proc degree*(self:Node):int=
   ##[
   # degree of Node.sum of out degree and in degree
   ]##
-  return len(self.out_edges) + len(self.in_edges)
-
-proc in_degree*(self:Node):int=
-  ##[
-  # in degree of Node.
-  ]##
-  return len(self.in_edges)
-
-proc out_degree*(self:Node):int=
-  ##[
-  # out degree of Node
-  ]##
-  return len(self.out_edges)
+  self.inDegree + self.outDegree
 
 proc `$`*(self:Node):string=
   ##[
   # Node object to strings
   ]##
-  return fmt"Node id:{self.id},label:{self.label},degree:{self.out_degree}"
+  fmt"Node id:{self.id},label:{self.label},degree:{self.out_degree}"
 
 proc getOutEdge*(self:Node,target:Node):Edge=
   ##[
@@ -165,25 +163,26 @@ proc `->`*(self:Node,target:Node):Node {.discardable.}=
   # If the Edge does not exist,create a new Edge.
   # Count of pass through the edge,`passed` is counted up
   ]#
-  return self.connect(target)
+  self.connect(target)
 
 proc `<-`*(self:Node,target:Node):Node {.discardable.}=
   #[
   # connect a Node to Node
   ]#
-  return target -> self
+  target -> self
+  target
 
 proc `<->`*(self:Node,target:Node):Node {.discardable.}=
   #[
   # connect a Node to Node,each other.
   ]#
-  return self -> target -> self
+  self -> target -> self
 
 proc `--`*(self:Node,target:Node):Edge {.discardable.}=
   #[
   # return outedge.
   ]#
-  return self.getOutEdge(target)
+  self.getOutEdge(target)
 
 proc delOutEdge*(self:Node,target:Node)=
   #[
@@ -243,10 +242,9 @@ proc newNetwork*(name:string="NoName"):Network=
   # create a new Network.
   ]#
 
-  var net = new Network
-  net.nodes = initOrderedTable[string,Node]()
-  net.name = name
-  return net
+  result= new Network
+  result.nodes = initOrderedTable[string,Node]()
+  result.name = name
 
 proc getNode*(self:Network,id:string):Node=
   #[
@@ -281,7 +279,7 @@ proc `[]`*(self:Network,id:string):Node=
   #[
   # get a node by id.if id does not exist,operator returns nil.
   ]#
-  return self.getNode(id)
+  self.getNode(id)
 
 proc `[]=`*(self:Network,id:string,node:Node):Node{.discardable.}=
   #[
@@ -384,19 +382,37 @@ proc getAdjMatrix_weighted*(self:Network):AdjMatrix_weighted=
   let n = len(self.nodes)
   var matrix = newSeq[seq[float]](n)
 
+  # id - index table
   var ids = newTable[string,int]()
   var i=0
   for id,node in self.nodes:
     matrix[i] = newSeq[float](n)
-    ids[node.id] = i
+    for col in 0..<n:
+      matrix[i][col] = Inf #init a weight to infinity
+
+    ids[node.id] = i # id-index
     i += 1
   
-  #plot to matrix
+  #edge weight into the matrix
   for e in self.edges:
     matrix[ids[e.source.id]][ids[e.target.id]] = e.weight
 
   return matrix
-  
+
+proc degrees*(self:Network):seq[int]=
+  result = newSeq[int](self.nodes.len)
+  var i = 0
+  for _,n in self.nodes:
+    result[i] = n.degree
+    i += 1
+
+proc centralityDegree*(self:Network):seq[float]=
+  let N = self.nodes.len
+  result = newSeq[float](N)
+  var i = 0
+  for _,n in self.nodes:
+    result[i] = float(n.degree) / float(2 * N)
+    i += 1
 
 proc print*(self:Network)=
   #[
@@ -411,7 +427,7 @@ proc toDOT*(self:Network):string=
   #[
   # convert Network to strings of DOT file format
   ]#
-  var buff="""
+  result="""
 digraph graph_name {
   graph [
     charset = "utf8";
@@ -423,16 +439,15 @@ digraph graph_name {
 """
   
   for id,node in self.nodes:
-    buff.add fmt"{node.label} [shape=circle];"
-    buff.add "\n"
+    result.add fmt"{node.label} [shape=circle];"
+    result.add "\n"
 
   for id,node in self.nodes:
     for t,edge in node.out_edges:
-      buff.add fmt"{node.label} -> {edge.target.label} [arrowhead = vee,weight={$edge.passed}];"
-      buff.add "\n"
+      result.add fmt"{node.label} -> {edge.target.label} [arrowhead = vee,weight={$edge.passed}];"
+      result.add "\n"
 
-  buff.add "}"
-  return buff
+  result.add "}"
 
 
 when isMainModule:
@@ -453,3 +468,7 @@ when isMainModule:
   var m = net.getAdjMatrix_weighted()
   for i in m:
     echo i
+
+  echo net.degrees
+
+  echo net.centralityDegree
