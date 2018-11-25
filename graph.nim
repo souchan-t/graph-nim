@@ -31,11 +31,11 @@ type
   GraphException = ref object of Exception
 
   AdjMatrix = seq[seq[int]]
-  AdjMatrix_weighted = seq[seq[float]]
+  AdjMatrix_W= seq[seq[float]]
 
-#------------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 # Edge Procedures
-#------------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 proc newEdge*(source,target:Node,label:string="",weight:float=0.0):Edge=
   ##
   ## create a new Edge
@@ -59,10 +59,9 @@ proc `$`*(self:Edge):string=
 #    return false
 #  else:
 #    return true
-
-#------------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 # NodeCmp Procedures
-#------------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 proc `<`*(self,other:NodeCmp):bool=
   ##
   ## compare Node by weight,for push to HeapQueue.
@@ -234,10 +233,10 @@ iterator breadthFirstSearch*(self:Node):Node=
         visited[e.target.id] = true
         queue.push((e.target,e.weight))
         
-  
-#------------------------------------------------------------------------------
+
+#---------------------------------------------------------------------------
 # Network(Graph) Procedures
-#------------------------------------------------------------------------------
+#---------------------------------------------------------------------------
 proc newNetwork*(name:string="NoName"):Network=
   ##
   ## create a new Network.
@@ -356,12 +355,28 @@ proc addNodeAndConnect*(self:Network,tags:openarray[string],
     for j in i..high(tags):
       self.addNodeAndConnect(tags[i],tags[j],directed,weight,selfconnect)
 
-iterator edges*(self:Network):Edge=
+iterator each_edge*(self:Network):Edge=
   ## Iterator of out edges.
   for nid,node in self.nodes:
     for eid,edge in node.out_edges:
       yield edge
 
+proc edges*(self:Network):seq[Edge]=
+  result=newSeq[Edge]()
+  for e in self.each_edge:
+    result.add(e)
+
+iterator each_node*(self:Network):Node=
+  for id,n in self.nodes:
+    yield n
+
+proc getNodeIds*(self:Network):seq[string]=
+  result = newSeq[string](self.nodes.len)
+
+  var i = 0
+  for k in self.nodes.keys:
+    result[i] = k
+    i += 1
 proc getAdjMatrix*(self:Network):AdjMatrix=
   ## create a adjacency matrix from network.
   ## a value that node does not connect others is `0`.
@@ -383,7 +398,7 @@ proc getAdjMatrix*(self:Network):AdjMatrix=
 
   return matrix
 
-proc getAdjMatrix_weighted*(self:Network):AdjMatrix_weighted=
+proc getAdjMatrix_weighted*(self:Network):AdjMatrix_W=
   ## create a weigthted adjacency matrix from Network.
   ## a value that node does not connect others is `Inf`.
   
@@ -424,7 +439,7 @@ proc newNetwork*(matrix:AdjMatrix,
       if matrix[i][j] == 1:
         result[nodeNames[i]] -> result[nodeNames[j]]
 
-proc newNetwork*(matrix:AdjMatrix_weighted,
+proc newNetwork*(matrix:AdjMatrix_W,
                  nodeNames:openarray[string],
                  name="noname"):Network=
   ## create a new Netowork from weigthted adjacency matrix.
@@ -545,10 +560,6 @@ when isMainModule:
   var net3 = net2.copy
 
   net.print
-  echo "============================================="
-  net2.print
-  echo "============================================="
 
-  net3.print
-
+  echo net.getNodeIds
 
