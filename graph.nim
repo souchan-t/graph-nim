@@ -7,31 +7,33 @@ import tables
 import strformat
 import heapqueue
 
-type
-  Edge* = ref object of RootObj ## Edge between Nodes
-    source:Node
-    target:Node
-    label:string
-    passed:int
-    weight:float
+#type
+#  Edge* = ref object of RootObj ## Edge between Nodes
+#    source:Node
+#    target:Node
+#    label:string
+#    passed:int
+#    weight:float
+#
+#  Node* = ref object of RootObj ## Node of Graph
+#    id:string
+#    label:string
+#    count:int
+#    out_edges:OrderedTable[string,Edge] #TODO Should change to be faster
+#    in_edges:OrderedTable[string,Edge]  #TODO Should change to be faster
+#
+#  NodeCmp = tuple[node:Node,priority:float] ## for Comparing
+#
+#  Network* = ref object of RootObj ## Graph
+#    name:string
+#    nodes:OrderedTable[string,Node]
+#
+#  GraphException = ref object of Exception
+#
+#  AdjMatrix = seq[seq[int]]
+#  AdjMatrix_W= seq[seq[float]]
 
-  Node* = ref object of RootObj ## Node of Graph
-    id:string
-    label:string
-    count:int
-    out_edges:OrderedTable[string,Edge] #TODO Should change to be faster
-    in_edges:OrderedTable[string,Edge]  #TODO Should change to be faster
-
-  NodeCmp = tuple[node:Node,priority:float] ## for Comparing
-
-  Network* = ref object of RootObj ## Graph
-    name:string
-    nodes:OrderedTable[string,Node]
-
-  GraphException = ref object of Exception
-
-  AdjMatrix = seq[seq[int]]
-  AdjMatrix_W= seq[seq[float]]
+include ./graph_header.nim
 
 #---------------------------------------------------------------------------
 # Edge Procedures
@@ -51,14 +53,6 @@ proc `$`*(self:Edge):string=
   result = fmt"Edge {self.source.label} -> {self.target.label} "
   result.add fmt"weight:{self.weight},passed:{self.passed})"
 
-#proc isAdjacent*(self:Edge,target:Edge):bool=
-#  if self.source.getEdgeIndex(target.source) == -1 and
-#    self.source.getEdgeIndex(target.target) == -1 and
-#    target.target.getEdgeIndex(self.source) == -1 and
-#    target.target.getEdgeIndex(self.target) == -1:
-#    return false
-#  else:
-#    return true
 #---------------------------------------------------------------------------
 # NodeCmp Procedures
 #---------------------------------------------------------------------------
@@ -377,7 +371,8 @@ proc getNodeIds*(self:Network):seq[string]=
   for k in self.nodes.keys:
     result[i] = k
     i += 1
-proc getAdjMatrix*(self:Network):AdjMatrix=
+
+proc createAdjMatrix*(self:Network):AdjMatrix=
   ## create a adjacency matrix from network.
   ## a value that node does not connect others is `0`.
   ##
@@ -398,7 +393,7 @@ proc getAdjMatrix*(self:Network):AdjMatrix=
 
   return matrix
 
-proc getAdjMatrix_weighted*(self:Network):AdjMatrix_W=
+proc createAdjMatrix_weighted*(self:Network):AdjMatrix_W=
   ## create a weigthted adjacency matrix from Network.
   ## a value that node does not connect others is `Inf`.
   
@@ -476,42 +471,17 @@ proc centralityDegree*(self:Network):seq[float]=
     result[i] = float(n.degree) / float(2 * N)
     i += 1
 
-proc copy*(self:Network):Network=
-  result = newNetwork(name=self.name)
-  
-  # copy nodes
-  for id,n in self.nodes:
-    var node = newNode(id=n.id,label=n.label)
-
-    # copy out edges
-    for t_id,e in n.out_edges:
-      var edge = new Edge
-      edge.source = node
-      edge.target = e.target
-      edge.label = e.label
-      edge.weight = e.weight
-      edge.passed = e.passed
-      node.out_edges[t_id] = edge
-    # copy in edges
-    for s_id,e in n.in_edges:
-      var edge = new Edge
-      edge.source = e.target
-      edge.target = node
-      edge.label = e.label
-      edge.weight = e.weight
-      edge.passed = e.passed
-      node.in_edges[s_id] = edge
-
-    result.addNode(node)
-
-proc print*(self:Network)=
+proc `$`*(self:Network):string=
   #[
   # echo the Network
   ]#
   for k,v in self.nodes:
-    echo fmt"Node:{v.label}(degree:{v.out_degree})"
+    result.add fmt"Node:{v.label}(degree:{v.out_degree})"
+    result.add "\n"
     for i,e in v.out_edges:
-      echo "\t",fmt"{v.label} ---> {e.passed} ---> {e.target.label}"
+      result.add "\t"
+      result.add fmt"{v.label} ---> {e.passed} ---> {e.target.label}"
+      result.add "\n"
 
 proc toDOT*(self:Network):string=
   #[
@@ -539,27 +509,62 @@ digraph graph_name {
 
   result.add "}"
 
+proc shortestWeight(self:Node,goal:Node):float=
+  ## calculate a shortest weight.
+  ## Dijkstra's algorithm with priority queue
+  var fixed_tbl = newTable[string,float]()
+  var queue = newHeapQueue[NodeCmp]()
+  queue.push((self,0.0))
+
+  while queue.len != 0:
+    var x = queue.pop()
+    if x[0] == goal:
+      return x[1]
+    if x[0].id in fixed_tbl:
+      continue
+    fixed_tbl[x[0].id] = x[1]
+    for t_id,edge in x[0].out_edges:
+      if (t_id in fixed_tbl) == false:
+        queue.push((edge.target,x[1] + edge.weight))
+  return Inf
 
 when isMainModule:
   let net = newNetwork()
-  let nodenames = ["A","B","C","D","E","F"]
+  let nodenames = ["A","B","C","D","E","F","G","H","I"]
   net.addNode(nodenames)
- 
+
   net["A"] <-> net["B"]
-  net["B"] <-> net["C"]
+  (net["A"] -- net["B"]).weight=1.0
+
+  net["A"] <-> net["C"]
+  (net["A"] -- net["C"]).weight=7.0
+
   net["A"] <-> net["D"]
+  (net["A"] -- net["D"]).weight=2.0
+
   net["B"] <-> net["E"]
-  (net["B"] -- net["E"]).weight = 0.2
-  (net["B"] -- net["C"]).weight = 0.1
+  (net["B"] -- net["E"]).weight=2.0
 
-  for n in net["A"].breadthFirstSearch:
-    echo n
+  net["B"] <-> net["F"]
+  (net["B"] -- net["F"]).weight=4.0
 
-  var m = net.getAdjMatrix()
-  let net2 = newNetwork(m,nodenames)
-  var net3 = net2.copy
+  net["C"] <-> net["F"]
+  (net["C"] -- net["F"]).weight=2.0
 
-  net.print
+  net["C"] <-> net["G"]
+  (net["C"] -- net["G"]).weight=3.0
 
-  echo net.getNodeIds
+  net["D"] <-> net["G"]
+  (net["D"] -- net["G"]).weight=5.0
+
+  net["E"] <-> net["F"]
+  (net["E"] -- net["F"]).weight=1.0
+
+  net["F"] <-> net["H"]
+  (net["F"] -- net["H"]).weight=6.0
+
+  net["G"] <-> net["H"]
+  (net["G"] -- net["H"]).weight=2.0
+
+  echo net["A"].shortestWeight(net["H"])
 
