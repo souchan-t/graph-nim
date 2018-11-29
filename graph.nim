@@ -38,19 +38,18 @@ include ./graph_header.nim
 #---------------------------------------------------------------------------
 # Edge Procedures
 #---------------------------------------------------------------------------
-proc newEdge*(source,target:Node,label:string="",weight:float=0.0):Edge=
+proc newEdge*(target:Node,label:string="",weight:float=0.0):Edge=
   ##
   ## create a new Edge
   ##
   result = new Edge
-  result.source = source
   result.target = target
   result.label = label
   result.passed = 0
   result.weight = weight
 
 proc `$`*(self:Edge):string=
-  result = fmt"Edge {self.source.label} -> {self.target.label} "
+  result = fmt"Edge -> {self.target.label} "
   result.add fmt"weight:{self.weight},passed:{self.passed})"
 
 #---------------------------------------------------------------------------
@@ -80,7 +79,7 @@ proc init*(self:Node,id:string,label:string="")=
 
 proc newNode*(id:string,label:string=""):Node=
   ##
-  ## create a new Node with initilize.
+  ## ocreate a new Node with initilize.
   ##
   result = new Node
   result.init(id,label)
@@ -109,23 +108,23 @@ proc `$`*(self:Node):string=
   ##
   fmt"Node id:{self.id},label:{self.label},degree:{self.out_degree}"
 
+proc hasOutEdge*(self:Node,target:Node):bool=
+  self.out_edges.hasKey(target.id)
+
+proc hasInEdge*(self:Node,target:Node):bool=
+  self.in_edges.hasKey(target.id)
+
 proc getOutEdge*(self:Node,target:Node):Edge=
   ##
-  ## return a edge.if edge was not found,proc returns nil.
+  ## return a edge.if edge was not found,proc occurs error.
   ##
-  if self.out_edges.hasKey(target.id):
-    return self.out_edges[target.id]
-  else:
-    return nil
+  return self.out_edges[target.id]
 
 proc getInEdge*(self:Node,target:Node):Edge=
   ##
-  ## return a edge.if edge was not found,proc returns nil.
+  ## return a edge.if edge was not found,proc occurs error.
   ##
-  if self.in_edges.hasKey(target.id):
-    return self.in_edges[target.id]
-  else:
-    return nil
+  return self.in_edges[target.id]
 
 proc connect*(self:Node,target:Node,weight=0.0):Node{.discardable.}=
   ##
@@ -133,18 +132,22 @@ proc connect*(self:Node,target:Node,weight=0.0):Node{.discardable.}=
   ## If the Edge does not exist,create a new Edge.
   ## Count of pass through the edge,`passed` is counted up
   ##
-  
-  var oedge = self.getOutEdge(target)
-  var iedge = target.getInEdge(self)
-  if isNil(oedge):
-    oedge = newEdge(self,target,weight=weight)
+  var oedge:Edge
+  var iedge:Edge 
+
+  if self.hasOutEdge(target):
+    oedge = self.getOutEdge(target)
+  else:
+    oedge = newEdge(target,weight=weight)
     self.out_edges[target.id] = oedge
 
   oedge.passed += 1
   self.count += 1
 
-  if isNil(iedge):
-    iedge = newEdge(target,self,weight=weight)
+  if target.hasInEdge(self):
+    iedge = target.getInEdge(self)
+  else:
+    iedge = newEdge(self,weight=weight)
     target.in_edges[self.id] = iedge
     
   iedge.passed += 1
@@ -177,6 +180,9 @@ proc `--`*(self:Node,target:Node):Edge {.discardable.}=
   ## return outedge.
   ##
   self.getOutEdge(target)
+
+proc `[]`*(self:Node,target:string):Edge {.discardable.}=
+  self.out_edges[target]
 
 proc delOutEdge*(self:Node,target:Node)=
   ##
@@ -240,15 +246,17 @@ proc newNetwork*(name:string="NoName"):Network=
   result.nodes = initOrderedTable[string,Node]()
   result.name = name
 
+proc hasNode*(self:Network,id:string):bool=
+  ## 
+  ## if Network has the node,returns true.
+  ##
+  self.nodes.hasKey(id)
 
 proc getNode*(self:Network,id:string):Node=
   ##
-  ## get a node by id. if id does not exist,proc returns nil
+  ## get a node by id. if id does not exist,proc occurs error.
   ##
-  if self.nodes.hasKey(id):
-    return self.nodes[id]
-  else:
-    return nil
+  return self.nodes[id]
 
 proc addNode*(self:Network,node:Node)=
   ##
@@ -272,7 +280,7 @@ proc addNode*(self:Network,node_ids:openarray[string])=
 
 proc `[]`*(self:Network,id:string):Node=
   ##
-  ## get a node by id.if id does not exist,operator returns nil.
+  ## get a node by id.if id does not exist,operator occurs error.
   ##
   self.getNode(id)
 
@@ -296,10 +304,11 @@ proc delNode*(self:Network,id:string)=
   ## delete a node from Network.
   ## all edges that connet with node,is deleted.
   ##
-  let n = self[id]
-  if isNil(n):
+  if self.hasNode(id) == false:
     return
 
+  let n = self[id]
+  
   # delete all edges that connect with node
   for id,oedge in n.out_edges:
     n.delOutEdge(oedge.target)
@@ -321,17 +330,20 @@ proc addNodeAndConnect*(self:Network,source:string,target:string,
   if not(selfconnect) and source == target:
     return
 
-  var s_node:Node = self[source]
-  var t_node:Node = self[target]
+  var s_node,t_node:Node
 
-  if isNil(s_node):
+  if self.hasNode(source):
+    s_node = self[source]
+  else:
     s_node = newNode(source,source)
     self.addNode(s_node)
 
-  if isNil(t_node):
+  if self.hasNode(target):
+    t_node = self[target]
+  else:
     t_node = newNode(target,target)
     self.addNode(t_node)
-  
+
   if directed:
     discard s_node -> t_node
   else:
@@ -349,14 +361,14 @@ proc addNodeAndConnect*(self:Network,tags:openarray[string],
     for j in i..high(tags):
       self.addNodeAndConnect(tags[i],tags[j],directed,weight,selfconnect)
 
-iterator each_edge*(self:Network):Edge=
+iterator each_edge*(self:Network):(Node,Edge)=
   ## Iterator of out edges.
   for nid,node in self.nodes:
     for eid,edge in node.out_edges:
-      yield edge
+      yield (node,edge)
 
-proc edges*(self:Network):seq[Edge]=
-  result=newSeq[Edge]()
+proc edges*(self:Network):seq[(Node,Edge)]=
+  result=newSeq[(Node,Edge)]()
   for e in self.each_edge:
     result.add(e)
 
@@ -388,8 +400,8 @@ proc createAdjMatrix*(self:Network):AdjMatrix=
     i += 1
   
   #plot to matrix
-  for e in self.edges:
-    matrix[ids[e.source.id]][ids[e.target.id]] = 1
+  for n,e in self.each_edge:
+    matrix[ids[n.id]][ids[e.target.id]] = 1
 
   return matrix
 
@@ -413,8 +425,8 @@ proc createAdjMatrix_weighted*(self:Network):AdjMatrix_W=
     i += 1
   
   #edge weight into the matrix
-  for e in self.edges:
-    matrix[ids[e.source.id]][ids[e.target.id]] = e.weight
+  for n,e in self.each_edge:
+    matrix[ids[n.id]][ids[e.target.id]] = e.weight
 
   return matrix
 
@@ -437,7 +449,7 @@ proc newNetwork*(matrix:AdjMatrix,
 proc newNetwork*(matrix:AdjMatrix_W,
                  nodeNames:openarray[string],
                  name="noname"):Network=
-  ## create a new Netowork from weigthted adjacency matrix.
+  ## create a new Network from weigthted adjacency matrix.
   ## `matrix` param expect a `seq[seq[float]]` type
   ## `nodeName` param expect a seq[string]` type
 
@@ -513,19 +525,24 @@ proc shortestWeight(self:Node,goal:Node):float=
   ## calculate a shortest weight.
   ## Dijkstra's algorithm with priority queue
   var fixed_tbl = newTable[string,float]()
+  
   var queue = newHeapQueue[NodeCmp]()
   queue.push((self,0.0))
 
   while queue.len != 0:
-    var x = queue.pop()
-    if x[0] == goal:
-      return x[1]
-    if x[0].id in fixed_tbl:
+    var (node,priority) = queue.pop()
+    if node == goal:
+      return priority
+    if fixed_tbl.hasKey(node.id) == true:
       continue
-    fixed_tbl[x[0].id] = x[1]
-    for t_id,edge in x[0].out_edges:
-      if (t_id in fixed_tbl) == false:
-        queue.push((edge.target,x[1] + edge.weight))
+    fixed_tbl[node.id] = priority
+    for t_id,edge in node.out_edges:
+
+      if fixed_tbl.hasKey(t_id) and fixed_tbl[t_id] <= priority + edge.weight:
+        continue
+
+      if (fixed_tbl.hasKey(t_id)) == false:
+        queue.push((edge.target,priority + edge.weight))
   return Inf
 
 when isMainModule:
@@ -534,37 +551,48 @@ when isMainModule:
   net.addNode(nodenames)
 
   net["A"] <-> net["B"]
-  (net["A"] -- net["B"]).weight=1.0
+  net["A"]["B"].weight=1.0
+  (net["B"] -- net["A"]).weight=1.0
 
   net["A"] <-> net["C"]
   (net["A"] -- net["C"]).weight=7.0
+  (net["C"] -- net["A"]).weight=7.0
 
   net["A"] <-> net["D"]
   (net["A"] -- net["D"]).weight=2.0
+  (net["D"] -- net["A"]).weight=2.0
 
   net["B"] <-> net["E"]
   (net["B"] -- net["E"]).weight=2.0
+  (net["E"] -- net["B"]).weight=2.0
 
   net["B"] <-> net["F"]
   (net["B"] -- net["F"]).weight=4.0
+  (net["F"] -- net["B"]).weight=4.0
 
   net["C"] <-> net["F"]
   (net["C"] -- net["F"]).weight=2.0
+  (net["F"] -- net["C"]).weight=2.0
 
   net["C"] <-> net["G"]
   (net["C"] -- net["G"]).weight=3.0
+  (net["G"] -- net["C"]).weight=3.0
 
   net["D"] <-> net["G"]
   (net["D"] -- net["G"]).weight=5.0
+  (net["G"] -- net["D"]).weight=5.0
 
   net["E"] <-> net["F"]
   (net["E"] -- net["F"]).weight=1.0
+  (net["F"] -- net["E"]).weight=1.0
 
   net["F"] <-> net["H"]
   (net["F"] -- net["H"]).weight=6.0
+  (net["H"] -- net["F"]).weight=6.0
 
   net["G"] <-> net["H"]
   (net["G"] -- net["H"]).weight=2.0
+  (net["H"] -- net["G"]).weight=2.0
 
   echo net["A"].shortestWeight(net["H"])
 

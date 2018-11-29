@@ -34,7 +34,7 @@ type
   AdjMatrix_W= seq[seq[float]]
 
 # Edge
-proc newEdge*(source,target:Node,label:string="",weight:float=0.0):Edge
+proc newEdge*(target:Node,label:string="",weight:float=0.0):Edge
 proc `$`*(self:Edge):string
 
 # NodeCmp
@@ -46,6 +46,8 @@ proc newNode*(id:string,label:string=""):Node
 proc inDegree*(self:Node):int
 proc outDegree*(self:Node):int
 proc degree*(self:Node):int
+proc hasOutEdge*(self:Node,target:Node):bool
+proc hasInEdge*(self:Node,target:Node):bool
 proc getOutEdge*(self:Node,target:Node):Edge
 proc getInEdge*(self:Node,target:Node):Edge
 proc delOutEdge*(self:Node,target:Node)
@@ -55,12 +57,14 @@ proc `->`*(self:Node,target:Node):Node {.discardable.}
 proc `<-`*(self:Node,target:Node):Node {.discardable.}
 proc `<->`*(self:Node,target:Node):Node {.discardable.}
 proc `--`*(self:Node,target:Node):Edge {.discardable.}
+proc `[]`*(self:Node,target:string):Edge {.discardable.}
 proc `$`*(self:Node):string
 #iterator depthFirstSearch*(self:Node):Node
 #iterator breadthFirstSearch*(self:Node):Node
 
 # Network
 proc newNetwork*(name:string="NoName"):Network
+proc hasNode*(self:Network,id:string):bool
 proc getNode*(self:Network,id:string):Node
 proc getNodeIds*(self:Network):seq[string]
 proc addNode*(self:Network,node:Node)
@@ -72,7 +76,7 @@ proc addNodeAndConnect*(self:Network,tags:openarray[string],
   directed=false,weight=0.0,selfconnect:bool=false)
 proc delNode*(self:Network,id:string)
 #iterator each_edge*(self:Network):Edge
-proc edges*(self:Network):seq[Edge]
+proc edges*(self:Network):seq[(Node,Edge)]
 #iterator each_node*(self:Network):Node
 proc createAdjMatrix*(self:Network):AdjMatrix
 proc createAdjMatrix_weighted*(self:Network):AdjMatrix_W
